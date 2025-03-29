@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
+
 	//"log"
 	"os"
 
@@ -15,10 +16,15 @@ var mydocument Document = Document{}
 var mymodel model = model{}
 
 type Document struct {
-	callables []func()
+	callables []Callable
 	Title     string    `xml:"title"`
 	Elements  []Element `xml:"elements>element"`
 	Script    string    `xml:"script"`
+}
+
+type Callable struct {
+	Id       string
+	function func()
 }
 
 type Element struct {
@@ -30,7 +36,7 @@ type Element struct {
 }
 
 type model struct {
-	cursor     []string
+	cursor     int
 	textInputs []TextInput
 }
 
@@ -45,11 +51,11 @@ func (m model) Init() tea.Cmd {
 
 func updateAllSpecialElements(msg tea.Msg) {
 	for i, textInput := range mymodel.textInputs {
-		if !textInput.TextModel.Focused() {
-			continue
+		if i == mymodel.cursor {
+			textInput.TextModel.Focus()
+			textInput.TextModel, _ = textInput.TextModel.Update(msg)
+			mymodel.textInputs[i] = textInput
 		}
-		textInput.TextModel, _ = textInput.TextModel.Update(msg)
-		mymodel.textInputs[i] = textInput
 	}
 }
 
@@ -58,7 +64,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
+		} else if msg.Type == tea.KeyTab {
+			mymodel.cursor++
 		}
+	}
+	if mymodel.cursor > len(mymodel.textInputs)-1 {
+		mymodel.cursor = 0
 	}
 	updateAllSpecialElements(msg)
 	return m, nil
@@ -139,7 +150,7 @@ func main() {
 add_element(new_element("text", "Hello, from Lua!", "", ""))
 add_element(new_element("input", "", "randomID", "", "Ok"))
 add_element(new_element("text", "Hello, second input from Lua!", "", ""))
-add_element(new_element("input", "", "randomID", "", "Hi"))
+add_element(new_element("input", "", "randomID2", "", "Hi!"))
 </script>
   </document>
 `
