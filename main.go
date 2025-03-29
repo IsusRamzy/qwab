@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	lua "github.com/Shopify/go-lua"
+	//"log"
 	"os"
-	//"github.com/charmbracelet/bubbles/textinput"
+
+	lua "github.com/Shopify/go-lua"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -15,23 +17,40 @@ var mymodel model = model{}
 type Document struct {
 	callables []func()
 	Title     string    `xml:"title"`
-	Elements  []Element `xml:"elements"`
+	Elements  []Element `xml:"elements>element"`
 	Script    string    `xml:"script"`
 }
 
 type Element struct {
-	Class    string `xml:"class,attr"`
-	Text     string `xml:"element"`
-	Id       string `xml:"id,attr"`
-	Callable string `xml:"callable,attr"`
+	Class       string `xml:"class,attr"`
+	Text        string `xml:",chardata"`
+	Id          string `xml:"id,attr"`
+	Callable    string `xml:"callable,attr"`
+	Placeholder string `xml:"placeholder,attr"`
 }
 
 type model struct {
-	cursor []string
+	cursor     []string
+	textInputs []TextInput
+}
+
+type TextInput struct {
+	TextModel textinput.Model
+	Id        string
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+	return textinput.Blink
+}
+
+func updateAllSpecialElements(msg tea.Msg) {
+	for i, textInput := range mymodel.textInputs {
+		if !textInput.TextModel.Focused() {
+			continue
+		}
+		textInput.TextModel, _ = textInput.TextModel.Update(msg)
+		mymodel.textInputs[i] = textInput
+	}
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -41,6 +60,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	}
+	updateAllSpecialElements(msg)
 	return m, nil
 }
 
@@ -48,8 +68,20 @@ func (m model) View() string {
 	text := applyBold(mydocument.Title)
 	text += "\n"
 	for _, element := range mydocument.Elements {
-		text += element.Text + "\n"
+		if element.Class == "text" {
+			text += element.Text + "\n"
+		} else if element.Class == "input" {
+			for _, textInput := range m.textInputs {
+				if textInput.Id == element.Id {
+					text += textInput.TextModel.View()
+					text += "\n"
+					break
+				}
+			}
+		}
 	}
+	a, _ := tea.LogToFile("log.txt", "TEXT")
+	a.Close()
 	return text
 }
 
@@ -68,8 +100,27 @@ func new_element(p *lua.State) int {
 	text, _ := p.ToString(2)
 	id, _ := p.ToString(3)
 	callable, _ := p.ToString(4)
-	p.PushUserData(Element{class, text, id, callable})
+	placeholder, _ := p.ToString(5)
+	p.PushUserData(Element{class, text, id, callable, placeholder})
 	return 1
+}
+
+func createInitialSpecialElements() {
+	found_special := false
+	for _, element := range mydocument.Elements {
+		if element.Class == "input" {
+			textInput := textinput.New()
+			textInput.Placeholder = element.Placeholder
+			textInput.CharLimit = 255
+			textInput.Width = 32
+			if !found_special {
+				textInput.Focus()
+				found_special = true
+			}
+			mymodel.textInputs = append(mymodel.textInputs, TextInput{textInput, element.Id})
+
+		}
+	}
 }
 
 func add_element(p *lua.State) int {
@@ -81,18 +132,23 @@ func add_element(p *lua.State) int {
 func main() {
 	XML := `
   <document>
-<title>Hello</title>
+<title>Hello Title</title>
 <elements>
-  <element class="text" id="mytext" callable="nothing">Hello from XML!</element>
+  <element class="text">Hello from XML!</element>
+  <element class="input" id="myinput" callable="" placeholder="input"></element>
 </elements>
 <script>
 add_element(new_element("text", "Hello, from Lua!", "", ""))
+add_element(new_element("input", "", "hey", "", "Ok"))
+add_element(new_element("text", "Hello, second input!", "", ""))
+--add_element(new_element("input", "", "yo", "", "Hi"))
 </script>
   </document>
 `
 	err := xml.Unmarshal([]byte(XML), &mydocument)
 	if err != nil {
 		fmt.Println(err)
+		os.Exit(1)
 	}
 	state := lua.NewState()
 	lua.OpenLibraries(state)
@@ -104,6 +160,7 @@ add_element(new_element("text", "Hello, from Lua!", "", ""))
 		fmt.Println(err)
 		os.Exit(1)
 	}
+	createInitialSpecialElements()
 	program := tea.NewProgram(mymodel)
 	program.Run()
 }
