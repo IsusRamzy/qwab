@@ -80,8 +80,6 @@ func (m model) View() string {
 			}
 		}
 	}
-	a, _ := tea.LogToFile("log.txt", "TEXT")
-	a.Close()
 	return text
 }
 
@@ -139,9 +137,9 @@ func main() {
 </elements>
 <script>
 add_element(new_element("text", "Hello, from Lua!", "", ""))
-add_element(new_element("input", "", "hey", "", "Ok"))
-add_element(new_element("text", "Hello, second input!", "", ""))
---add_element(new_element("input", "", "yo", "", "Hi"))
+add_element(new_element("input", "", "randomID", "", "Ok"))
+add_element(new_element("text", "Hello, second input from Lua!", "", ""))
+add_element(new_element("input", "", "randomID", "", "Hi"))
 </script>
   </document>
 `
