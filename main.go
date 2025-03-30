@@ -11,8 +11,8 @@ import (
 )
 
 var state *lua.State = lua.NewState()
-var mydocument Document = Document{}
-var mymodel model = model{}
+var thedocument Document = Document{}
+var themodel model = model{}
 
 type Document struct {
 	Title    string    `xml:"title"`
@@ -43,20 +43,20 @@ func (m model) Init() tea.Cmd {
 }
 
 func updateAllSpecialElements(msg tea.Msg) {
-	for i, textInput := range mymodel.textInputs {
-		if i == mymodel.cursor {
+	for i, textInput := range themodel.textInputs {
+		if i == themodel.cursor {
 			textInput.TextModel.Focus()
 			textInput.TextModel, _ = textInput.TextModel.Update(msg)
-			mymodel.textInputs[i] = textInput
+			themodel.textInputs[i] = textInput
 		} else {
 			textInput.TextModel.Blur()
-			mymodel.textInputs[i] = textInput
+			themodel.textInputs[i] = textInput
 		}
 	}
 }
 
 func isFocused(Id string) bool {
-	for _, input := range mymodel.textInputs {
+	for _, input := range themodel.textInputs {
 		if input.Id == Id {
 			return input.TextModel.Focused()
 		}
@@ -65,7 +65,7 @@ func isFocused(Id string) bool {
 }
 
 func callAllSpecialCallables() {
-	for _, element := range mydocument.Elements {
+	for _, element := range thedocument.Elements {
 		if element.Class == "input" && isFocused(element.Id) {
 			if element.Callable != "" {
 				state.Global(element.Callable)
@@ -81,11 +81,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
 		} else if msg.Type == tea.KeyTab {
-			mymodel.cursor++
+			themodel.cursor++
 		}
 	}
-	if mymodel.cursor > len(mymodel.textInputs)-1 {
-		mymodel.cursor = 0
+	if themodel.cursor > len(themodel.textInputs)-1 {
+		themodel.cursor = 0
 	}
 	updateAllSpecialElements(msg)
 	callAllSpecialCallables()
@@ -93,9 +93,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	text := applyBold(mydocument.Title)
+	text := applyBold(thedocument.Title)
 	text += "\n"
-	for _, element := range mydocument.Elements {
+	for _, element := range thedocument.Elements {
 		if element.Class == "text" {
 			text += element.Text + "\n"
 		} else if element.Class == "input" {
@@ -122,7 +122,7 @@ func applyBold(text string) string {
 }
 func createInitialSpecialElements() {
 	found_special := false
-	for _, element := range mydocument.Elements {
+	for _, element := range thedocument.Elements {
 		if element.Class == "input" {
 			textInput := textinput.New()
 			textInput.Placeholder = element.Placeholder
@@ -132,7 +132,7 @@ func createInitialSpecialElements() {
 				textInput.Focus()
 				found_special = true
 			}
-			mymodel.textInputs = append(mymodel.textInputs, TextInput{textInput, element.Id})
+			themodel.textInputs = append(themodel.textInputs, TextInput{textInput, element.Id})
 
 		}
 	}
@@ -151,7 +151,7 @@ func new_element(p *lua.State) int {
 func add_element(p *lua.State) int {
 	myInterfacedElement := p.ToUserData(1)
 	myelement := myInterfacedElement.(Element)
-	mydocument.Elements = append(mydocument.Elements, myelement)
+	thedocument.Elements = append(thedocument.Elements, myelement)
 	return 0
 }
 
@@ -169,19 +169,19 @@ add_element(new_element("input", "", "randomID", "callable1", "Ok"))
 add_element(new_element("text", "Hello, second input from Lua!"))
 add_element(new_element("input", "", "randomID2", "callable2", "Hi!"))
 function callable1()
-  add_element(new_element("text", "Called1"))
+  --add_element(new_element("text", "Called1"))
 end
 function callable2()
-  add_element(new_element("text", "Called2"))
+  --add_element(new_element("text", "Called2"))
 end
 
 function XML()
-  add_element(new_element("text", "XML"))
+  --add_element(new_element("text", "XML"))
 end
 </script>
   </document>
 `
-	err := xml.Unmarshal([]byte(XML), &mydocument)
+	err := xml.Unmarshal([]byte(XML), &thedocument)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -190,12 +190,12 @@ end
 	state.Register("Print", Print)
 	state.Register("add_element", add_element)
 	state.Register("new_element", new_element)
-	err = lua.DoString(state, mydocument.Script)
+	err = lua.DoString(state, thedocument.Script)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 	createInitialSpecialElements()
-	program := tea.NewProgram(mymodel)
+	program := tea.NewProgram(themodel)
 	program.Run()
 }
