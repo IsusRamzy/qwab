@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-
-	//"log"
 	"os"
 
 	lua "github.com/Shopify/go-lua"
@@ -12,19 +10,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+var state *lua.State = lua.NewState()
 var mydocument Document = Document{}
 var mymodel model = model{}
 
 type Document struct {
-	callables []Callable
-	Title     string    `xml:"title"`
-	Elements  []Element `xml:"elements>element"`
-	Script    string    `xml:"script"`
-}
-
-type Callable struct {
-	Id       string
-	function func()
+	Title    string    `xml:"title"`
+	Elements []Element `xml:"elements>element"`
+	Script   string    `xml:"script"`
 }
 
 type Element struct {
@@ -55,6 +48,29 @@ func updateAllSpecialElements(msg tea.Msg) {
 			textInput.TextModel.Focus()
 			textInput.TextModel, _ = textInput.TextModel.Update(msg)
 			mymodel.textInputs[i] = textInput
+		} else {
+			textInput.TextModel.Blur()
+			mymodel.textInputs[i] = textInput
+		}
+	}
+}
+
+func isFocused(Id string) bool {
+	for _, input := range mymodel.textInputs {
+		if input.Id == Id {
+			return input.TextModel.Focused()
+		}
+	}
+	return false
+}
+
+func callAllSpecialCallables() {
+	for _, element := range mydocument.Elements {
+		if element.Class == "input" && isFocused(element.Id) {
+			if element.Callable != "" {
+				state.Global(element.Callable)
+				state.ProtectedCall(0, 0, 0)
+			}
 		}
 	}
 }
@@ -72,6 +88,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		mymodel.cursor = 0
 	}
 	updateAllSpecialElements(msg)
+	callAllSpecialCallables()
 	return m, nil
 }
 
@@ -103,17 +120,6 @@ func Print(p *lua.State) int {
 func applyBold(text string) string {
 	return fmt.Sprint("\x1B[1m" + text + "\x1B[0m")
 }
-
-func new_element(p *lua.State) int {
-	class, _ := p.ToString(1)
-	text, _ := p.ToString(2)
-	id, _ := p.ToString(3)
-	callable, _ := p.ToString(4)
-	placeholder, _ := p.ToString(5)
-	p.PushUserData(Element{class, text, id, callable, placeholder})
-	return 1
-}
-
 func createInitialSpecialElements() {
 	found_special := false
 	for _, element := range mydocument.Elements {
@@ -132,25 +138,46 @@ func createInitialSpecialElements() {
 	}
 }
 
+func new_element(p *lua.State) int {
+	class, _ := p.ToString(1)
+	text, _ := p.ToString(2)
+	id, _ := p.ToString(3)
+	callable, _ := p.ToString(4)
+	placeholder, _ := p.ToString(5)
+	p.PushUserData(Element{class, text, id, callable, placeholder})
+	return 1
+}
+
 func add_element(p *lua.State) int {
 	myInterfacedElement := p.ToUserData(1)
 	myelement := myInterfacedElement.(Element)
 	mydocument.Elements = append(mydocument.Elements, myelement)
 	return 0
 }
+
 func main() {
 	XML := `
   <document>
 <title>Hello Title</title>
 <elements>
   <element class="text">Hello from XML!</element>
-  <element class="input" id="myinput" callable="" placeholder="input"></element>
+  <element class="input" id="myinput" callable="XML" placeholder="input"></element>
 </elements>
 <script>
-add_element(new_element("text", "Hello, from Lua!", "", ""))
-add_element(new_element("input", "", "randomID", "", "Ok"))
-add_element(new_element("text", "Hello, second input from Lua!", "", ""))
-add_element(new_element("input", "", "randomID2", "", "Hi!"))
+add_element(new_element("text", "Hello, from Lua!"))
+add_element(new_element("input", "", "randomID", "callable1", "Ok"))
+add_element(new_element("text", "Hello, second input from Lua!"))
+add_element(new_element("input", "", "randomID2", "callable2", "Hi!"))
+function callable1()
+  add_element(new_element("text", "Called1"))
+end
+function callable2()
+  add_element(new_element("text", "Called2"))
+end
+
+function XML()
+  add_element(new_element("text", "XML"))
+end
 </script>
   </document>
 `
@@ -159,7 +186,6 @@ add_element(new_element("input", "", "randomID2", "", "Hi!"))
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	state := lua.NewState()
 	lua.OpenLibraries(state)
 	state.Register("Print", Print)
 	state.Register("add_element", add_element)
