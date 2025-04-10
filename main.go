@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	lua "github.com/yuin/gopher-lua"
@@ -32,8 +33,12 @@ type Element struct {
 type model struct {
 	cursor     int
 	textInputs []TextInput
+	textAreas  []TextArea
 }
-
+type TextArea struct {
+	TextModel textarea.Model
+	Id        string
+}
 type TextInput struct {
 	TextModel textinput.Model
 	Id        string
@@ -54,6 +59,16 @@ func updateAllSpecialElements(msg tea.Msg) {
 			themodel.textInputs[i] = textInput
 		}
 	}
+	for i, textArea := range themodel.textAreas {
+		if i == themodel.cursor {
+			textArea.TextModel.Focus()
+			textArea.TextModel, _ = textArea.TextModel.Update(msg)
+			themodel.textAreas[i] = textArea
+		} else {
+			textArea.TextModel.Blur()
+			themodel.textAreas[i] = textArea
+		}
+	}
 }
 
 func updateTextSpecialElements() {
@@ -61,6 +76,12 @@ func updateTextSpecialElements() {
 		if element.Class == "input" {
 			if isFocused(element.Id) {
 				for _, textInput := range themodel.textInputs {
+					if textInput.Id == element.Id {
+						element.Text = textInput.TextModel.Value()
+						thedocument.Elements[i] = element
+					}
+				}
+				for _, textInput := range themodel.textAreas {
 					if textInput.Id == element.Id {
 						element.Text = textInput.TextModel.Value()
 						thedocument.Elements[i] = element
@@ -77,12 +98,17 @@ func isFocused(Id string) bool {
 			return input.TextModel.Focused()
 		}
 	}
+	for _, input := range themodel.textAreas {
+		if input.Id == Id {
+			return input.TextModel.Focused()
+		}
+	}
 	return false
 }
 
 func callAllSpecialCallables() {
 	for _, element := range thedocument.Elements {
-		if element.Class == "input" && isFocused(element.Id) {
+		if (element.Class == "textarea" || element.Class == "input") && isFocused(element.Id) {
 			if element.Callable != "" {
 				whatever := state.GetGlobal(element.Callable)
 				state.Push(whatever)
@@ -95,7 +121,6 @@ func callAllSpecialCallables() {
 		}
 	}
 }
-
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -120,7 +145,7 @@ func (m model) View() string {
 	for _, element := range thedocument.Elements {
 		if element.Class == "text" {
 			text += element.Text + "\n"
-		} else if element.Class == "input" {
+		} else if element.Class == "input" || element.Class == "textarea" {
 			for _, textInput := range m.textInputs {
 				if textInput.Id == element.Id {
 					text += textInput.TextModel.View()
@@ -143,19 +168,28 @@ func applyBold(text string) string {
 	return fmt.Sprint("\x1B[1m" + text + "\x1B[0m")
 }
 func createInitialSpecialElements() {
-	found_special := false
+	foundInput := false
+	foundTextarea := false
 	for _, element := range thedocument.Elements {
 		if element.Class == "input" {
 			textInput := textinput.New()
 			textInput.Placeholder = element.Placeholder
 			textInput.CharLimit = 255
 			textInput.Width = 32
-			if !found_special {
+			if !foundInput {
 				textInput.Focus()
-				found_special = true
+				foundInput = true
 			}
 			themodel.textInputs = append(themodel.textInputs, TextInput{textInput, element.Id})
-
+		} else if element.Class == "textarea" {
+			textArea := textarea.New()
+			//textArea.Placeholder = element.Placeholder
+			textArea.CharLimit = 255
+			if !foundTextarea {
+				textArea.Focus()
+				foundTextarea = true
+			}
+			themodel.textAreas = append(themodel.textAreas, TextArea{textArea, element.Id})
 		}
 	}
 }
@@ -199,6 +233,11 @@ func set_by_Id(p *lua.LState) int {
 	return 0
 }
 
+func get_document(p *lua.LState) int {
+	p.Push(luar.New(p, thedocument))
+	return 1
+}
+
 func log(text string) {
 	file, _ := os.OpenFile("log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
@@ -219,18 +258,26 @@ func main() {
   <element class="text">Hello from XML! Enter your name:</element>
   <element class="input" id="name" callable="name_handler" placeholder="John Doe"></element>
   <element class="text" id="myid"></element>
-  <element class="text" id="thiswork"></element>
+  <element class="textarea" id="myarea" callable="area_handler">Hello</element>
 </elements>
 <script>
 add_element(new_element("text", "Hello, from Lua!"))
---add_element(new_element("input", "", "randomID", "callable1", "Ok"))
-function name_handler()
-    local text = "Hello "..get_by_Id("name").Text .. "!"
-    --print(text)
-    set_by_Id("myid", new_element("text", text, "myid"))
-    set_by_Id("thiswork", new_element("text", "WORKS!"))
+
+function area_handler()
+  --add_element(new_element("text", "Hi, ".. get_by_Id("myarea").Text))
 end
-</script>
+
+function randomID()
+  add_element(new_element("text", "Hey, how are you doin'?"))
+end
+
+function name_handler()
+  log(get_document())
+  local text = "Hello, ".. get_by_Id("name").Text.. "!"
+  --print(text)
+  set_by_Id("myid", new_element("text", text, "myid"))
+end
+  </script>
   </document>
 `
 	err := xml.Unmarshal([]byte(XML), &thedocument)
@@ -241,6 +288,7 @@ end
 	state.OpenLibs()
 	defer state.Close()
 	state.Register("log", lua_log)
+	state.Register("get_document", get_document)
 	state.Register("add_element", add_element)
 	state.Register("new_element", new_element)
 	state.Register("get_by_Id", get_by_Id)
