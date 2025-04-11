@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/charmbracelet/bubbles/textarea"
@@ -48,9 +50,18 @@ func (m model) Init() tea.Cmd {
 	return textinput.Blink
 }
 
+func findIndexOfElementById(Id string) int {
+	for index, element := range thedocument.Elements {
+		if element.Id == Id {
+			return index
+		}
+	}
+	return -404
+}
+
 func updateAllSpecialElements(msg tea.Msg) {
 	for i, textInput := range themodel.textInputs {
-		if i == themodel.cursor {
+		if findIndexOfElementById(textInput.Id) == themodel.cursor {
 			textInput.TextModel.Focus()
 			textInput.TextModel, _ = textInput.TextModel.Update(msg)
 			themodel.textInputs[i] = textInput
@@ -60,7 +71,7 @@ func updateAllSpecialElements(msg tea.Msg) {
 		}
 	}
 	for i, textArea := range themodel.textAreas {
-		if i == themodel.cursor {
+		if findIndexOfElementById(textArea.Id) == themodel.cursor {
 			textArea.TextModel.Focus()
 			textArea.TextModel, _ = textArea.TextModel.Update(msg)
 			themodel.textAreas[i] = textArea
@@ -73,7 +84,7 @@ func updateAllSpecialElements(msg tea.Msg) {
 
 func updateTextSpecialElements() {
 	for i, element := range thedocument.Elements {
-		if element.Class == "input" {
+		if element.Class == "input" || element.Class == "textarea" {
 			if isFocused(element.Id) {
 				for _, textInput := range themodel.textInputs {
 					if textInput.Id == element.Id {
@@ -130,7 +141,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			themodel.cursor++
 		}
 	}
-	if themodel.cursor > len(themodel.textInputs)-1 {
+	if themodel.cursor > len(thedocument.Elements)-1 {
 		themodel.cursor = 0
 	}
 	updateAllSpecialElements(msg)
@@ -149,6 +160,13 @@ func (m model) View() string {
 			for _, textInput := range m.textInputs {
 				if textInput.Id == element.Id {
 					text += textInput.TextModel.View()
+					text += "\n"
+					break
+				}
+			}
+			for _, textArea := range m.textAreas {
+				if textArea.Id == element.Id {
+					text += textArea.TextModel.View()
 					text += "\n"
 					break
 				}
@@ -183,7 +201,6 @@ func createInitialSpecialElements() {
 			themodel.textInputs = append(themodel.textInputs, TextInput{textInput, element.Id})
 		} else if element.Class == "textarea" {
 			textArea := textarea.New()
-			//textArea.Placeholder = element.Placeholder
 			textArea.CharLimit = 255
 			if !foundTextarea {
 				textArea.Focus()
@@ -239,13 +256,30 @@ func get_document(p *lua.LState) int {
 }
 
 func log(text string) {
-	file, _ := os.OpenFile("log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	defer file.Close()
-	file.WriteString(text + "\n")
+	client := &http.Client{}
+	u, err := url.Parse(os.Getenv("LOGAPP_URI") + "/v1/log")
+	if err != nil {
+		fmt.Println("Unexpected Error: ", err)
+		os.Exit(1)
+	}
+	q := u.Query()
+	q.Add("text", text)
+	u.RawQuery = q.Encode()
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		fmt.Println("Error creating request object for logging:", err)
+		os.Exit(1)
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		fmt.Println("HTTP Log Err:", err)
+		os.Exit(1)
+	}
+	res.Body.Close()
 }
 
 func lua_log(p *lua.LState) int {
-	text := p.ToString(0)
+	text := p.ToString(-1)
 	log(text)
 	return 0
 }
@@ -258,7 +292,8 @@ func main() {
   <element class="text">Hello from XML! Enter your name:</element>
   <element class="input" id="name" callable="name_handler" placeholder="John Doe"></element>
   <element class="text" id="myid"></element>
-  <element class="textarea" id="myarea" callable="area_handler">Hello</element>
+  <element class="text">Write a bit about yourself:</element>
+  <element class="textarea" id="myarea" callable="area_handler"></element>
 </elements>
 <script>
 add_element(new_element("text", "Hello, from Lua!"))
@@ -267,14 +302,8 @@ function area_handler()
   --add_element(new_element("text", "Hi, ".. get_by_Id("myarea").Text))
 end
 
-function randomID()
-  add_element(new_element("text", "Hey, how are you doin'?"))
-end
-
 function name_handler()
-  log(get_document())
   local text = "Hello, ".. get_by_Id("name").Text.. "!"
-  --print(text)
   set_by_Id("myid", new_element("text", text, "myid"))
 end
   </script>
@@ -282,7 +311,7 @@ end
 `
 	err := xml.Unmarshal([]byte(XML), &thedocument)
 	if err != nil {
-		fmt.Println(err)
+		println(err)
 		os.Exit(1)
 	}
 	state.OpenLibs()
