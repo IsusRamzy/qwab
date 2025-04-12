@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -18,6 +19,9 @@ import (
 var state *lua.LState = lua.NewState()
 var thedocument Document = Document{}
 var themodel model = model{}
+var thecookies map[string]string
+
+const PERMS = 0775
 
 type Document struct {
 	Title    string    `xml:"title"`
@@ -323,6 +327,51 @@ func lua_log(p *lua.LState) int {
 	return 0
 }
 
+func getCookiesPath() string {
+	home, _ := os.UserHomeDir()
+	parsed, _ := url.Parse(os.Args[1])
+	os.MkdirAll(home+"/.local/usr/share/qwab/cookies/", PERMS)
+	return home + "/.local/usr/share/qwab/cookies/" + parsed.Host + ".json"
+}
+
+func loadCookies() {
+	FILEPATH := getCookiesPath()
+	_, err := os.Stat(FILEPATH)
+	var fileExists bool
+	if err != nil {
+		fileExists = false
+	} else if err == nil {
+		fileExists = true
+	}
+	if fileExists {
+		data, _ := os.ReadFile(FILEPATH)
+		json.Unmarshal(data, &thecookies)
+	} else {
+		thecookies = map[string]string{}
+		os.WriteFile(FILEPATH, []byte(`{}`), PERMS)
+	}
+}
+
+func updateCookies() {
+	cookiesPath := getCookiesPath()
+	marshaled, _ := json.Marshal(thecookies)
+	os.WriteFile(cookiesPath, marshaled, PERMS)
+}
+
+func set_cookie(p *lua.LState) int {
+	key := p.ToString(1)
+	val := p.ToString(2)
+	thecookies[key] = val
+	updateCookies()
+	return 0
+}
+
+func get_cookie(p *lua.LState) int {
+	key := p.ToString(1)
+	p.Push(lua.LString(thecookies[key]))
+	return 1
+}
+
 func main() {
 	XML := getXmlCode()
 	err := xml.Unmarshal([]byte(XML), &thedocument)
@@ -330,6 +379,7 @@ func main() {
 		fmt.Println("XML error:", err)
 		os.Exit(1)
 	}
+	loadCookies()
 	state.OpenLibs()
 	defer state.Close()
 	state.Register("log", lua_log)
@@ -338,6 +388,8 @@ func main() {
 	state.Register("new_element", new_element)
 	state.Register("get_by_Id", get_by_Id)
 	state.Register("set_by_Id", set_by_Id)
+	state.Register("get_cookie", get_cookie)
+	state.Register("set_cookie", set_cookie)
 	err = state.DoString(thedocument.Script)
 	if err != nil {
 		fmt.Println(err)
