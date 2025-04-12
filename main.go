@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -114,19 +115,27 @@ func isFocused(Id string) bool {
 			return input.TextModel.Focused()
 		}
 	}
+	if themodel.cursor == findIndexOfElementById(Id) {
+		return true
+	}
 	return false
+}
+
+func callSpecialCallable(callable string) {
+	whatever := state.GetGlobal(callable)
+	state.Push(whatever)
+	state.CallByParam(lua.P{
+		Fn:   state.GetGlobal(callable),
+		NRet: 0,
+	}, nil)
+
 }
 
 func callAllSpecialCallables() {
 	for _, element := range thedocument.Elements {
 		if (element.Class == "textarea" || element.Class == "input") && isFocused(element.Id) {
 			if element.Callable != "" {
-				whatever := state.GetGlobal(element.Callable)
-				state.Push(whatever)
-				state.CallByParam(lua.P{
-					Fn:   state.GetGlobal(element.Callable),
-					NRet: 0,
-				}, nil)
+				callSpecialCallable(element.Callable)
 				updateTextSpecialElements()
 			}
 		}
@@ -139,6 +148,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		} else if msg.Type == tea.KeyTab {
 			themodel.cursor++
+		} else if msg.Type == tea.KeyEnter {
+			for i, elem := range thedocument.Elements {
+				if i == themodel.cursor && elem.Class == "button" {
+					callSpecialCallable(elem.Callable)
+				}
+			}
 		}
 	}
 	if themodel.cursor > len(thedocument.Elements)-1 {
@@ -171,6 +186,9 @@ func (m model) View() string {
 					break
 				}
 			}
+		} else if element.Class == "button" {
+			text += "[" + element.Text + "]"
+			text += "\n"
 		}
 	}
 	return text
@@ -254,6 +272,27 @@ func get_document(p *lua.LState) int {
 	p.Push(luar.New(p, thedocument))
 	return 1
 }
+func getXmlCode() string {
+	client := &http.Client{}
+	u, err := url.Parse(os.Args[1])
+	if err != nil {
+		fmt.Println("Unexpected Error: ", err)
+		os.Exit(1)
+	}
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		fmt.Println("Error creating request object:", err)
+		os.Exit(1)
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		fmt.Println("HTTP Err:", err)
+		os.Exit(1)
+	}
+	mybody, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	return string(mybody)
+}
 
 func log(text string) {
 	client := &http.Client{}
@@ -285,33 +324,10 @@ func lua_log(p *lua.LState) int {
 }
 
 func main() {
-	XML := `
-  <document>
-<title>Hello Title</title>
-<elements>
-  <element class="text">Hello from XML! Enter your name:</element>
-  <element class="input" id="name" callable="name_handler" placeholder="John Doe"></element>
-  <element class="text" id="myid"></element>
-  <element class="text">Write a bit about yourself:</element>
-  <element class="textarea" id="myarea" callable="area_handler"></element>
-</elements>
-<script>
-add_element(new_element("text", "Hello, from Lua!"))
-
-function area_handler()
-  --add_element(new_element("text", "Hi, ".. get_by_Id("myarea").Text))
-end
-
-function name_handler()
-  local text = "Hello, ".. get_by_Id("name").Text.. "!"
-  set_by_Id("myid", new_element("text", text, "myid"))
-end
-  </script>
-  </document>
-`
+	XML := getXmlCode()
 	err := xml.Unmarshal([]byte(XML), &thedocument)
 	if err != nil {
-		println(err)
+		fmt.Println("XML error:", err)
 		os.Exit(1)
 	}
 	state.OpenLibs()
