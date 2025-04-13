@@ -272,10 +272,6 @@ func set_by_Id(p *lua.LState) int {
 	return 0
 }
 
-func get_document(p *lua.LState) int {
-	p.Push(luar.New(p, thedocument))
-	return 1
-}
 func getXmlCode() string {
 	client := &http.Client{}
 	u, err := url.Parse(os.Args[1])
@@ -383,7 +379,6 @@ func main() {
 	state.OpenLibs()
 	defer state.Close()
 	state.Register("log", lua_log)
-	state.Register("get_document", get_document)
 	state.Register("add_element", add_element)
 	state.Register("new_element", new_element)
 	state.Register("get_by_Id", get_by_Id)
