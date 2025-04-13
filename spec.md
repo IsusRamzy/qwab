@@ -23,7 +23,7 @@ NOTE: An `id` should be used to identify the element for rendering (`input`s, `t
 Scripting can be done with Lua using the `<script>` tag.
 To modify the document, these global functions are available:
 - **`get_by_Id(Id)`**: A function that takes in an ID and returns the element. You can access: `Id`, `Class`, `Callable`, and `Placeholder`
-- **`set_by_Id(Id, element)`**: A function that takes in an ID and an element (one can created an element using `new_element()`), then sets it. NOTE: Provide an ID to `new_element()`.
+- **`set_by_Id(Id, element)`**: A function that takes in an ID and an element (one can create an element using `new_element()`), then sets it. NOTE: Provide an ID to `new_element()`.
 - **`new_element(class, text, id, callable, placeholder)`**: Returns a new element based on the provided parameters. Parameters that aren't provided shall be "zeroed".
 - **`add_element(element)`**: Adds an element to the document.
 - **`set_cookie(key, val)`**: Sets cookie with the key `key` to `val`. NOTE: cookies are stored by hostname.
