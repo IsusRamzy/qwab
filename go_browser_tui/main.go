@@ -291,7 +291,7 @@ func getXmlCode() string {
 	}
 	mybody, _ := io.ReadAll(res.Body)
 	res.Body.Close()
-	return string(mybody)
+	return "<document>" + string(mybody) + "</document>"
 }
 
 func log(text string) {

@@ -5,12 +5,11 @@ Client: Renders an XML document based on the server's response, then run the scr
 ## XML
 The XML document's base is this:
 ```xml
-<document>
-<title>TITLE</title>
+<title>TITLE (optional)</title>
 <elements>
 <element class="text, input, textarea, .." id="exampleID" callable="luaGlobalFunctionToCall"  placeholder="for input and textarea"></element>
+...
 </elements>
-</document>
 ```
 NOTE: An `id` should be used to identify the element for rendering (`input`s, `textarea`s).
 
@@ -22,10 +21,10 @@ NOTE: An `id` should be used to identify the element for rendering (`input`s, `t
 ## Lua Scripting
 Scripting can be done with Lua using the `<script>` tag.
 To modify the document, these global functions are available:
-- **`get_by_Id(Id)`**: A function that takes in an ID and returns the element. You can access: `Id`, `Class`, `Callable`, and `Placeholder`
+- **`get_by_Id(Id)`**: A function that takes in an ID and returns the element. You can access: `Id`, `Class`, `Callable`, and `Placeholder`, `Text`
 - **`set_by_Id(Id, element)`**: A function that takes in an ID and an element (one can create an element using `new_element()`), then sets it. NOTE: Provide an ID to `new_element()`.
 - **`new_element(class, text, id, callable, placeholder)`**: Returns a new element based on the provided parameters. Parameters that aren't provided shall be "zeroed".
 - **`add_element(element)`**: Adds an element to the document.
-- **`set_cookie(key, val)`**: Sets cookie with the key `key` to `val`. NOTE: cookies are stored by hostname.
+- **`set_cookie(key, val)`**: Sets cookie with the key `key` to `val`. NOTE: cookies are stored by host name.
 - **`get_cookie(key)`**: Gets cookie with the key `key`.
-- **`log(mystring)`**: Logs `mystring` to `logapp` (the URI is should be stored in `$LOGAPP_URI`)
+- **`log(mystring)`**: Logs `mystring` to a console.
