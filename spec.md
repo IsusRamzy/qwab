@@ -7,9 +7,12 @@ The XML document's base is this:
 ```xml
 <title>TITLE (optional)</title>
 <elements>
-<element class="text, input, textarea, .." id="exampleID" callable="luaGlobalFunctionToCall"  placeholder="for input and textarea"></element>
+<element class="text, input, textarea, .." id="exampleID" callable="luaGlobalFunctionToCall"  placeholder="for input and textarea">innerXML for Text</element>
 ...
 </elements>
+<script>
+-- Lua code
+</script>
 ```
 NOTE: An `id` should be used to identify the element for rendering (`input`s, `textarea`s).
 
@@ -21,7 +24,7 @@ NOTE: An `id` should be used to identify the element for rendering (`input`s, `t
 ## Lua Scripting
 Scripting can be done with Lua using the `<script>` tag.
 To modify the document, these global functions are available:
-- **`get_by_Id(Id)`**: A function that takes in an ID and returns the element. You can access: `Id`, `Class`, `Callable`, and `Placeholder`, `Text`
+- **`get_by_Id(Id)`**: A function that takes in an ID and returns the element. You can access: `Id`, `Class`, `Callable`, and `Placeholder`, `Text` where `Text` represents the user input in case of an input/textarea.
 - **`set_by_Id(Id, element)`**: A function that takes in an ID and an element (one can create an element using `new_element()`), then sets it. NOTE: Provide an ID to `new_element()`.
 - **`new_element(class, text, id, callable, placeholder)`**: Returns a new element based on the provided parameters. Parameters that aren't provided shall be "zeroed".
 - **`add_element(element)`**: Adds an element to the document.
@@ -33,3 +36,4 @@ To modify the document, these global functions are available:
 And these are the functions of the library `json`:
 - **`luajson.encode(mydata)`** Encodes `mydata` into JSON. 
 - **`luajson.decode(myjson)`** Decodes `myjson` from JSON into data.
+
