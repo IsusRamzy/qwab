@@ -13,9 +13,11 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	lua "github.com/yuin/gopher-lua"
+	luajson "layeh.com/gopher-json"
 	luar "layeh.com/gopher-luar"
 )
 
+var httpclient *http.Client = &http.Client{}
 var state *lua.LState = lua.NewState()
 var thedocument Document = Document{}
 var themodel model = model{}
@@ -273,7 +275,6 @@ func set_by_Id(p *lua.LState) int {
 }
 
 func getXmlCode() string {
-	client := &http.Client{}
 	u, err := url.Parse(os.Args[1])
 	if err != nil {
 		fmt.Println("Unexpected Error: ", err)
@@ -284,7 +285,7 @@ func getXmlCode() string {
 		fmt.Println("Error creating request object:", err)
 		os.Exit(1)
 	}
-	res, err := client.Do(req)
+	res, err := httpclient.Do(req)
 	if err != nil {
 		fmt.Println("HTTP Err:", err)
 		os.Exit(1)
@@ -295,7 +296,6 @@ func getXmlCode() string {
 }
 
 func log(text string) {
-	client := &http.Client{}
 	u, err := url.Parse(os.Getenv("LOGAPP_URI") + "/v1/log")
 	if err != nil {
 		fmt.Println("Unexpected Error: ", err)
@@ -309,7 +309,7 @@ func log(text string) {
 		fmt.Println("Error creating request object for logging:", err)
 		os.Exit(1)
 	}
-	res, err := client.Do(req)
+	res, err := httpclient.Do(req)
 	if err != nil {
 		fmt.Println("HTTP Log Err:", err)
 		os.Exit(1)
@@ -368,6 +368,24 @@ func get_cookie(p *lua.LState) int {
 	return 1
 }
 
+func GET(p *lua.LState) int {
+	http_server := p.ToString(1)
+	req, err := http.NewRequest("GET", http_server, nil)
+	if err != nil {
+		p.Push(lua.LString("ERR_CREATING_REQUEST"))
+		return 1
+	}
+	res, err := httpclient.Do(req)
+	if err != nil {
+		p.Push(lua.LString("ERR_SENDING_REQUEST"))
+		return 1
+	}
+	mybody, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	p.Push(lua.LString(mybody))
+	return 1
+}
+
 func main() {
 	XML := getXmlCode()
 	err := xml.Unmarshal([]byte(XML), &thedocument)
@@ -378,6 +396,7 @@ func main() {
 	loadCookies()
 	state.OpenLibs()
 	defer state.Close()
+	luajson.Preload(state)
 	state.Register("log", lua_log)
 	state.Register("add_element", add_element)
 	state.Register("new_element", new_element)
@@ -385,6 +404,7 @@ func main() {
 	state.Register("set_by_Id", set_by_Id)
 	state.Register("get_cookie", get_cookie)
 	state.Register("set_cookie", set_cookie)
+	state.Register("GET", GET)
 	err = state.DoString(thedocument.Script)
 	if err != nil {
 		fmt.Println(err)

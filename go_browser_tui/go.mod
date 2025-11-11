@@ -30,4 +30,5 @@ require (
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
+	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
 )
