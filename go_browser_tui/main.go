@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -368,6 +369,25 @@ func get_cookie(p *lua.LState) int {
 	return 1
 }
 
+func POST(p *lua.LState) int {
+	http_server := p.ToString(1)
+	request_body := p.ToString(2)
+	req, err := http.NewRequest("POST", http_server, bytes.NewReader([]byte(request_body)))
+	if err != nil {
+		p.Push(lua.LString("ERR_CREATING_REQUEST"))
+		return 1
+	}
+	res, err := httpclient.Do(req)
+	if err != nil {
+		p.Push(lua.LString("ERR_SENDING_REQUEST"))
+		return 1
+	}
+	mybody, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	p.Push(lua.LString(mybody))
+	return 1
+}
+
 func GET(p *lua.LState) int {
 	http_server := p.ToString(1)
 	req, err := http.NewRequest("GET", http_server, nil)
@@ -405,6 +425,7 @@ func main() {
 	state.Register("get_cookie", get_cookie)
 	state.Register("set_cookie", set_cookie)
 	state.Register("GET", GET)
+	state.Register("POST", POST)
 	err = state.DoString(thedocument.Script)
 	if err != nil {
 		fmt.Println(err)
