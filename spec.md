@@ -34,6 +34,6 @@ To modify the document, these global functions are available:
 - **``POST(server_url, mystring)``**: Sends a `POST` request to `server_url` with the request's body as `mystring` and returns the response's body.
 - **`GET(server_url)`**: Sends a `GET` request to `server_url` and returns the response's body.
 And these are the functions of the library `json`:
-- **`luajson.encode(mydata)`** Encodes `mydata` into JSON. 
-- **`luajson.decode(myjson)`** Decodes `myjson` from JSON into data.
+- **`json.encode(mydata)`** Encodes `mydata` into JSON. 
+- **`json.decode(myjson)`** Decodes `myjson` from JSON into data.
 
