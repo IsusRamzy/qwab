@@ -18,7 +18,7 @@ import (
 	luar "layeh.com/gopher-luar"
 )
 
-var httpclient *http.Client = &http.Client{}
+var theclient *http.Client = &http.Client{}
 var state *lua.LState = lua.NewState()
 var thedocument Document = Document{}
 var themodel model = model{}
@@ -248,7 +248,6 @@ func new_element(p *lua.LState) int {
 
 func add_element(p *lua.LState) int {
 	myElement := p.ToUserData(1).Value
-	//myelement := myInterfacedElement.(Element)
 	thedocument.Elements = append(thedocument.Elements, myElement.(Element))
 	return 0
 }
@@ -265,8 +264,8 @@ func get_by_Id(p *lua.LState) int {
 
 func set_by_Id(p *lua.LState) int {
 	Id := p.ToString(1)
-	AAAA := p.ToUserData(2).Value
-	newElement := AAAA.(Element)
+	luaElement := p.ToUserData(2).Value
+	newElement := luaElement.(Element)
 	for i, element := range thedocument.Elements {
 		if element.Id == Id {
 			thedocument.Elements[i] = newElement
@@ -286,7 +285,7 @@ func getXmlCode() string {
 		fmt.Println("Error creating request object:", err)
 		os.Exit(1)
 	}
-	res, err := httpclient.Do(req)
+	res, err := theclient.Do(req)
 	if err != nil {
 		fmt.Println("HTTP Err:", err)
 		os.Exit(1)
@@ -310,7 +309,7 @@ func log(text string) {
 		fmt.Println("Error creating request object for logging:", err)
 		os.Exit(1)
 	}
-	res, err := httpclient.Do(req)
+	res, err := theclient.Do(req)
 	if err != nil {
 		fmt.Println("HTTP Log Err:", err)
 		os.Exit(1)
@@ -377,7 +376,7 @@ func POST(p *lua.LState) int {
 		p.Push(lua.LString("ERR_CREATING_REQUEST"))
 		return 1
 	}
-	res, err := httpclient.Do(req)
+	res, err := theclient.Do(req)
 	if err != nil {
 		p.Push(lua.LString("ERR_SENDING_REQUEST"))
 		return 1
@@ -395,7 +394,7 @@ func GET(p *lua.LState) int {
 		p.Push(lua.LString("ERR_CREATING_REQUEST"))
 		return 1
 	}
-	res, err := httpclient.Do(req)
+	res, err := theclient.Do(req)
 	if err != nil {
 		p.Push(lua.LString("ERR_SENDING_REQUEST"))
 		return 1
@@ -415,9 +414,9 @@ func main() {
 	}
 	loadCookies()
 	state.OpenLibs()
+	state.Register("log", lua_log)
 	defer state.Close()
 	luajson.Preload(state)
-	state.Register("log", lua_log)
 	state.Register("add_element", add_element)
 	state.Register("new_element", new_element)
 	state.Register("get_by_Id", get_by_Id)
